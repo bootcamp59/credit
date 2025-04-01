@@ -1,0 +1,767 @@
+openapi: 3.0.3
+info:
+  title: Credit Service API
+  description: |
+    API para gestión de productos de crédito (préstamos y tarjetas de crédito).
+    Implementa todas las operaciones requeridas por el negocio bancario.
+  version: 1.0.2
+  contact:
+    name: Equipo de Créditos
+    email: creditos@nttdata.com
+
+servers:
+  - url: https://api.bank.com/credit-service/v1
+    description: Servidor de producción
+  - url: http://localhost:8083/api/v1
+    description: Servidor local de desarrollo
+
+tags:
+  - name: Credits
+    description: Operaciones CRUD con productos de crédito
+  - name: CreditOperations
+    description: Operaciones transaccionales de créditos
+  - name: CreditReports
+    description: Consultas de estados y movimientos
+
+paths:
+  /credits:
+    post:
+      tags: [Credits]
+      summary: Crear nuevo producto de crédito
+      description: |
+        Crea un nuevo producto de crédito con validaciones estrictas:
+        - Cliente debe existir
+        - Restricciones por tipo de cliente (PERSONAL/BUSINESS)
+        - Límites de productos permitidos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditCreateRequest'
+            examples:
+              personalLoan:
+                value:
+                  type: "PERSONAL_LOAN"
+                  customerId: "5f8d8a7b2f4d4b1d9c3e3f1a"
+                  amount: 10000.00
+                  interestRate: 12.5
+                  termMonths: 12
+              creditCard:
+                value:
+                  type: "PERSONAL_CREDIT_CARD"
+                  customerId: "5f8d8a7b2f4d4b1d9c3e3f1a"
+                  limit: 5000.00
+                  billingDay: 15
+      responses:
+        '201':
+          description: Crédito creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDetails'
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Credits]
+      summary: Listar créditos (admin)
+      description: Lista paginada de todos los créditos (solo para administradores)
+      parameters:
+        - name: page
+          in: query
+          description: Número de página (0-based)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Tamaño de la página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: type
+          in: query
+          description: Filtrar por tipo de crédito
+          schema:
+            $ref: '#/components/schemas/CreditType'
+        - name: status
+          in: query
+          description: Filtrar por estado
+          schema:
+            $ref: '#/components/schemas/CreditStatus'
+      responses:
+        '200':
+          description: Lista de créditos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /credits/{creditId}:
+    get:
+      tags: [Credits]
+      summary: Obtener detalles de crédito
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+            example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+      responses:
+        '200':
+          description: Detalles completos del crédito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Credits]
+      summary: Actualizar crédito parcialmente
+      description: Actualiza campos específicos de un crédito (solo campos permitidos)
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditUpdateRequest'
+      responses:
+        '200':
+          description: Crédito actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDetails'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credits/customer/{customerId}:
+    get:
+      tags: [Credits]
+      summary: Listar créditos por cliente
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          description: ID único del cliente
+          schema:
+            type: string
+            format: uuid
+            example: "5f8d8a7b2f4d4b1d9c3e3f1a"
+        - name: page
+          in: query
+          description: Número de página (0-based)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Tamaño de la página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Lista de créditos del cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credits/{creditId}/payments:
+    post:
+      tags: [CreditOperations]
+      summary: Registrar pago de crédito
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+            example:
+              amount: 500.00
+              description: "Pago mensual"
+              paymentDate: "2023-03-15"
+      responses:
+        '200':
+          description: Pago registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditOperationResult'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credits/{creditId}/charges:
+    post:
+      tags: [CreditOperations]
+      summary: Registrar consumo en tarjeta
+      description: Solo aplicable para tarjetas de crédito
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRequest'
+            example:
+              amount: 250.00
+              description: "Compra en tienda XYZ"
+              merchant: "TIENDA XYZ 123"
+      responses:
+        '200':
+          description: Consumo registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditOperationResult'
+        '400':
+          description: |
+            Posibles errores:
+            - Límite de crédito excedido
+            - Producto no es tarjeta de crédito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credits/{creditId}/balance:
+    get:
+      tags: [CreditReports]
+      summary: Consultar estado de crédito
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Estado actual del crédito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditBalanceResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credits/{creditId}/transactions:
+    get:
+      tags: [CreditReports]
+      summary: Listar movimientos
+      parameters:
+        - name: creditId
+          in: path
+          required: true
+          description: ID único del crédito
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          description: Número de página (0-based)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Tamaño de la página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/CreditTransactionType'
+      responses:
+        '200':
+          description: Lista de movimientos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditTransactionListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    # Tipos enumerados
+    CreditType:
+      type: string
+      enum: [PERSONAL_LOAN, BUSINESS_LOAN, PERSONAL_CREDIT_CARD, BUSINESS_CREDIT_CARD]
+      description: |
+        PERSONAL_LOAN - Préstamo personal (1 por cliente)
+        BUSINESS_LOAN - Préstamo empresarial (múltiples)
+        PERSONAL_CREDIT_CARD - Tarjeta de crédito personal
+        BUSINESS_CREDIT_CARD - Tarjeta de crédito empresarial
+      example: "PERSONAL_LOAN"
+
+    CreditStatus:
+      type: string
+      enum: [ACTIVE, CLOSED, DELINQUENT, BLOCKED]
+      default: "ACTIVE"
+
+    CreditTransactionType:
+      type: string
+      enum: [PAYMENT, CHARGE, INTEREST, FEE, ADJUSTMENT]
+
+    CurrencyCode:
+      type: string
+      pattern: '^[A-Z]{3}$'
+      example: "USD"
+
+    # Esquemas principales
+    CreditCreateRequest:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/CreditType'
+        customerId:
+          type: string
+          format: uuid
+          description: ID del cliente titular
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Monto para préstamos, límite para tarjetas
+        interestRate:
+          type: number
+          format: double
+          minimum: 0
+          description: Obligatorio para préstamos
+        termMonths:
+          type: integer
+          minimum: 1
+          description: Plazo en meses (obligatorio para préstamos)
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Día de corte (obligatorio para tarjetas)
+      required:
+        - type
+        - customerId
+      discriminator:
+        propertyName: type
+        mapping:
+          PERSONAL_LOAN: '#/components/schemas/LoanRequiredFields'
+          BUSINESS_LOAN: '#/components/schemas/LoanRequiredFields'
+          PERSONAL_CREDIT_CARD: '#/components/schemas/CreditCardRequiredFields'
+          BUSINESS_CREDIT_CARD: '#/components/schemas/CreditCardRequiredFields'
+
+    LoanRequiredFields:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+        interestRate:
+          type: number
+          format: double
+          minimum: 0
+        termMonths:
+          type: integer
+          minimum: 1
+      required:
+        - amount
+        - interestRate
+        - termMonths
+
+    CreditCardRequiredFields:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          description: Límite de crédito
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+      required:
+        - amount
+        - billingDay
+
+    CreditDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        creditNumber:
+          type: string
+          readOnly: true
+          example: "LOAN-87654321"
+        type:
+          $ref: '#/components/schemas/CreditType'
+        customerId:
+          type: string
+          format: uuid
+        originalAmount:
+          type: number
+          format: double
+          minimum: 0
+          example: 10000.00
+        currentBalance:
+          type: number
+          format: double
+          example: 7500.00
+        interestRate:
+          type: number
+          format: double
+          minimum: 0
+          example: 12.5
+        monthlyPayment:
+          type: number
+          format: double
+          minimum: 0
+          example: 1200.00
+        termMonths:
+          type: integer
+          minimum: 1
+          example: 12
+        startDate:
+          type: string
+          format: date
+          readOnly: true
+        nextPaymentDate:
+          type: string
+          format: date
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/CreditStatus'
+        # Campos específicos para tarjetas
+        availableCredit:
+          type: number
+          format: double
+          readOnly: true
+          example: 2500.00
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 15
+        minimumPayment:
+          type: number
+          format: double
+          minimum: 0
+          example: 200.00
+        paymentDueDate:
+          type: string
+          format: date
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreditUpdateRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/CreditStatus'
+        interestRate:
+          type: number
+          format: double
+          minimum: 0
+        creditLimit:
+          type: number
+          format: double
+          minimum: 0
+          description: Solo para tarjetas de crédito
+
+    CreditListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditDetails'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    # Esquemas para operaciones
+    PaymentRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 500.00
+        description:
+          type: string
+          maxLength: 255
+          example: "Pago mensual"
+        paymentDate:
+          type: string
+          format: date
+          example: "2023-03-15"
+      required:
+        - amount
+        - paymentDate
+
+    ChargeRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 250.00
+        description:
+          type: string
+          maxLength: 255
+          example: "Compra en tienda XYZ"
+        merchant:
+          type: string
+          maxLength: 100
+          example: "TIENDA XYZ 123"
+      required:
+        - amount
+        - description
+        - merchant
+
+    CreditOperationResult:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+        creditId:
+          type: string
+          format: uuid
+        newBalance:
+          type: number
+          format: double
+          example: 7000.00
+        availableCredit:
+          type: number
+          format: double
+          nullable: true
+          example: 3000.00
+        operationDate:
+          type: string
+          format: date-time
+        message:
+          type: string
+          example: "Operación realizada exitosamente"
+
+    CreditBalanceResponse:
+      type: object
+      properties:
+        creditId:
+          type: string
+          format: uuid
+        originalAmount:
+          type: number
+          format: double
+          example: 10000.00
+        currentBalance:
+          type: number
+          format: double
+          example: 7500.00
+        availableCredit:
+          type: number
+          format: double
+          nullable: true
+          example: 2500.00
+        nextPaymentDate:
+          type: string
+          format: date
+          nullable: true
+        paymentDueDate:
+          type: string
+          format: date
+          nullable: true
+        minimumPayment:
+          type: number
+          format: double
+          nullable: true
+          example: 200.00
+
+    CreditTransactionListResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditTransactionDetail'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    CreditTransactionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/CreditTransactionType'
+        amount:
+          type: number
+          format: double
+        description:
+          type: string
+        date:
+          type: string
+          format: date-time
+        reference:
+          type: string
+        merchant:
+          type: string
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+
+  responses:
+    InvalidRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: "2023-03-15T10:00:00Z"
+            status: 400
+            error: "Bad Request"
+            message: "El tipo de cliente no permite este tipo de crédito"
+            path: "/api/v1/credits"
+            details:
+              - "Clientes personales solo pueden tener un préstamo personal"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Conflict:
+      description: Conflicto con el estado actual
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Acceso no autorizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
