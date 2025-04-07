@@ -1,5 +1,7 @@
 package com.bootcamp.credit.business;
 
+import com.bootcamp.credit.dto.CreditRequestDTO;
+import com.bootcamp.credit.enums.TransactionType;
 import com.bootcamp.credit.model.Credit;
 import com.bootcamp.credit.model.Customer;
 import com.bootcamp.credit.repository.CreditRepository;
@@ -31,13 +33,21 @@ public class CreditService {
         return creditRepository.findByCustomerId(customerId);
     }
 
+    public Mono<Boolean> findByIdAndCustomerId(String id,String customerId) {
+        return creditRepository.findByIdAndCustomerId(id, customerId)
+                .map( a -> {
+                    return a != null;
+                });
+    }
+
     public Mono<Credit> create(Credit credit) {
         return validateCustomerType(credit.getCustomerId(), credit.getType())
                 .then(validateCreditLimits(credit.getCustomerId(), credit.getType()))
                 .then(creditRepository.existsByCreditNumber(credit.getCreditNumber()))
-                .flatMap(exists -> exists
+                .flatMap(exists -> {
+                        return exists
                         ? Mono.error(new IllegalArgumentException("Credit number already exists"))
-                        : saveNewCredit(credit));
+                        : saveNewCredit(credit); });
     }
 
     private Mono<Void> validateCustomerType(String customerId, Credit.CreditType creditType) {
@@ -72,14 +82,14 @@ public class CreditService {
 
     private Mono<Credit> saveNewCredit(Credit credit) {
         credit.setOpeningDate(LocalDate.now());
-        credit.setBalance(credit.getAmount());
+        credit.setBalance(credit.getLinea());
 
         if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
             // Set credit card specific dates
             LocalDate now = LocalDate.now();
             credit.setCutDate(now.with(TemporalAdjusters.lastDayOfMonth()));
             credit.setPaymentDate(now.plusMonths(1).withDayOfMonth(15));
-            credit.setAvailableCredit(credit.getCreditLimit());
+            credit.setCreditUsageToPay(0.0);
         }
 
         return creditRepository.save(credit);
@@ -92,7 +102,7 @@ public class CreditService {
                     existingCredit.setRemainingInstallments(credit.getRemainingInstallments());
 
                     if (existingCredit.getType() == Credit.CreditType.CREDIT_CARD) {
-                        existingCredit.setAvailableCredit(credit.getAvailableCredit());
+                        existingCredit.setCreditUsageToPay(credit.getCreditUsageToPay());
                         existingCredit.setCreditLimit(credit.getCreditLimit());
                     }
 
@@ -111,9 +121,9 @@ public class CreditService {
                     credit.setBalance(credit.getBalance() - amount);
 
                     if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
-                        credit.setAvailableCredit(
+                        credit.setCreditUsageToPay(
                                 Math.min(credit.getCreditLimit(),
-                                        credit.getAvailableCredit() + amount));
+                                        credit.getCreditUsageToPay() + amount));
                     }
 
                     return creditRepository.save(credit);
@@ -128,16 +138,47 @@ public class CreditService {
                                 "Only credit cards can have consumptions"));
                     }
 
-                    if (credit.getAvailableCredit() < amount) {
+                    if (credit.getCreditUsageToPay() < amount) {
                         return Mono.error(new IllegalArgumentException(
                                 "Consumption exceeds available credit"));
                     }
 
                     credit.setBalance(credit.getBalance() + amount);
-                    credit.setAvailableCredit(credit.getAvailableCredit() - amount);
+                    credit.setCreditUsageToPay(credit.getCreditUsageToPay() - amount);
 
                     return creditRepository.save(credit);
                 });
+    }
+
+    public Mono<Credit> transaction(String creditId, CreditRequestDTO dto){
+        return creditRepository.findById(creditId)
+            .flatMap(credit -> {
+                if(dto.getTransactionType() == TransactionType.PAYMENT){
+
+                    var balance = credit.getBalance() != null ? credit.getBalance() : 0;
+
+                    if(credit.getType() == Credit.CreditType.CREDIT_CARD){
+                        if(dto.getMonto() > credit.getCreditUsageToPay()){
+                            return Mono.error(new RuntimeException("No hay consumo para pagar"));
+                        }
+                        credit.setBalance( balance + dto.getMonto());
+                        credit.setCreditUsageToPay(credit.getCreditUsageToPay() - dto.getMonto());
+                    }else {
+                        credit.setBalance(balance - dto.getMonto());
+                    }
+
+
+                }
+                if(dto.getTransactionType() == TransactionType.CONSUMPTION){
+                    if(dto.getMonto() > credit.getBalance()){
+                        return Mono.error(new RuntimeException("No puedes sobre pasar tu limite de credito"));
+                    }
+
+                    credit.setBalance(credit.getBalance() - dto.getMonto());
+                    credit.setCreditUsageToPay(credit.getCreditUsageToPay() + dto.getMonto());
+                }
+                return  creditRepository.save(credit);
+            });
     }
 
     public Mono<Void> delete(String id) {

@@ -1,6 +1,7 @@
 package com.bootcamp.credit.controller;
 
 import com.bootcamp.credit.business.CreditService;
+import com.bootcamp.credit.dto.CreditRequestDTO;
 import com.bootcamp.credit.model.Credit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,11 @@ public class CreditController {
     @GetMapping("/customer/{customerId}")
     public Flux<Credit> getCreditsByCustomerId(@PathVariable String customerId) {
         return creditService.findByCustomerId(customerId);
+    }
+
+    @GetMapping("/{id}/customer/{customerId}")
+    public Mono<Boolean> findByIdAndCustomerId(@PathVariable String id, @PathVariable String customerId){
+        return creditService.findByIdAndCustomerId(id, customerId);
     }
 
     @PostMapping
@@ -69,5 +75,14 @@ public class CreditController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public Mono<Void> deleteCredit(@PathVariable String id) {
         return creditService.delete(id);
+    }
+
+    @PostMapping("/{id}/transaction")
+    public Mono<ResponseEntity<Credit>> transaction(@PathVariable String id, @RequestBody CreditRequestDTO dto){
+        return creditService.transaction(id, dto)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build())
+                .onErrorResume(e -> Mono.just(ResponseEntity.badRequest().build()));
+
     }
 }

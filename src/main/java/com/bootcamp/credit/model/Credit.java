@@ -32,7 +32,7 @@ public class Credit {
 
     @NotNull(message = "Amount is required")
     @Min(value = 0, message = "Amount must be positive")
-    private Double amount;
+    private Double linea; //linea de credito/prestamo
 
     @NotNull(message = "Balance is required")
     @Min(value = 0, message = "Balance must be positive")
@@ -51,7 +51,7 @@ public class Credit {
 
     // Fields specific to credit cards
     private Double creditLimit;
-    private Double availableCredit;
+    private Double creditUsageToPay; // credito usado por pagar
     private LocalDate cutDate; // For credit cards
     private LocalDate paymentDate; // For credit cards
 
