@@ -36,7 +36,8 @@ public class CreditController {
 
     @GetMapping("/{id}/customer/{customerId}")
     public Mono<Boolean> findByIdAndCustomerId(@PathVariable String id, @PathVariable String customerId){
-        return creditService.findByIdAndCustomerId(id, customerId);
+        return creditService.findByIdAndCustomerId(id, customerId)
+                .defaultIfEmpty(false);
     }
 
     @PostMapping
