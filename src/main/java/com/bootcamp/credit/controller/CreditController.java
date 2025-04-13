@@ -2,6 +2,7 @@ package com.bootcamp.credit.controller;
 
 import com.bootcamp.credit.business.CreditService;
 import com.bootcamp.credit.dto.CreditRequestDTO;
+import com.bootcamp.credit.dto.PaymentRequest;
 import com.bootcamp.credit.model.Credit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -54,10 +55,9 @@ public class CreditController {
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
-    @PostMapping("/{id}/payment")
-    public Mono<ResponseEntity<Credit>> makePayment(
-            @PathVariable String id, @RequestParam Double amount) {
-        return creditService.makePayment(id, amount)
+    @PostMapping("/payment")
+    public Mono<ResponseEntity<Credit>> makePayment(@RequestBody PaymentRequest request) {
+        return creditService.makePayment(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build())
                 .onErrorResume(e -> Mono.just(ResponseEntity.badRequest().build()));
@@ -84,6 +84,11 @@ public class CreditController {
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build())
                 .onErrorResume(e -> Mono.just(ResponseEntity.badRequest().build()));
+    }
 
+    //cliente no podra obtener un producto si posee alguna deuda vencida
+    @GetMapping("/customer/{customerId}/debt")
+    public Flux<Credit> hasDebt(@PathVariable  String customerId){
+        return creditService.hasDebt(customerId);
     }
 }

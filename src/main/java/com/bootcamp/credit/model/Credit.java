@@ -56,6 +56,6 @@ public class Credit {
     private LocalDate paymentDate; // For credit cards
 
     public enum CreditType {
-        PERSONAL, EMPRESARIAL, CREDIT_CARD
+        CREDIT_PERSONAL, CREDIT_EMPRESARIAL, CREDIT_CARD
     }
 }

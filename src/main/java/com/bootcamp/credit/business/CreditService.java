@@ -1,6 +1,7 @@
 package com.bootcamp.credit.business;
 
 import com.bootcamp.credit.dto.CreditRequestDTO;
+import com.bootcamp.credit.dto.PaymentRequest;
 import com.bootcamp.credit.enums.TransactionType;
 import com.bootcamp.credit.model.Credit;
 import com.bootcamp.credit.model.Customer;
@@ -57,7 +58,7 @@ public class CreditService {
                 .retrieve()
                 .bodyToMono(Customer.class)
                 .flatMap(customer -> {
-                    if (creditType == Credit.CreditType.PERSONAL &&
+                    if (creditType == Credit.CreditType.CREDIT_PERSONAL &&
                             customer.getType() != Customer.CustomerType.PERSONAL) {
                         return Mono.error(new IllegalArgumentException(
                                 "Personal loans are only for personal customers"));
@@ -67,7 +68,7 @@ public class CreditService {
     }
 
     private Mono<Void> validateCreditLimits(String customerId, Credit.CreditType creditType) {
-        if (creditType == Credit.CreditType.PERSONAL) {
+        if (creditType == Credit.CreditType.CREDIT_PERSONAL) {
             return creditRepository.countByCustomerIdAndType(customerId, creditType)
                     .flatMap(count -> {
                         if (count > 0) {
@@ -110,24 +111,38 @@ public class CreditService {
                 });
     }
 
-    public Mono<Credit> makePayment(String creditId, Double amount) {
-        return creditRepository.findById(creditId)
+    public Mono<Credit> makePayment(PaymentRequest request) {
+
+        if(request.getOrigen().getProductId() == null || request.getOrigen().getProductId().isEmpty()){
+            //guardar transaccion
+
+            //guardar
+            return creditRepository.findByCreditNumber(request.getDestino().getProductId())
                 .flatMap(credit -> {
-                    if (credit.getBalance() < amount) {
-                        return Mono.error(new IllegalArgumentException(
-                                "Payment amount exceeds credit balance"));
-                    }
-
-                    credit.setBalance(credit.getBalance() - amount);
-
-                    if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
-                        credit.setCreditUsageToPay(
-                                Math.min(credit.getCreditLimit(),
-                                        credit.getCreditUsageToPay() + amount));
-                    }
-
+                    credit.setCreditUsageToPay(credit.getCreditUsageToPay() - request.getAmount());
                     return creditRepository.save(credit);
                 });
+        }
+
+        return creditRepository.findByCreditNumber(request.getOrigen().getProductId())
+            .flatMap(credit -> {
+
+                if (credit.getBalance() < request.getAmount()) {
+                    return Mono.error(new IllegalArgumentException(
+                            "Payment amount exceeds credit balance"));
+                }
+
+                credit.setBalance(credit.getBalance() - request.getAmount());
+
+                if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
+                    credit.setCreditUsageToPay(Math.min(credit.getLinea(), credit.getCreditUsageToPay() + request.getAmount()));
+                }
+
+                //LOGICA PARA GARDAR LA TRANSACCION
+
+                // depsues de gardar transaccion
+                return creditRepository.save(credit);
+            });
     }
 
     public Mono<Credit> chargeConsumption(String creditId, Double amount) {
@@ -179,6 +194,26 @@ public class CreditService {
                 }
                 return  creditRepository.save(credit);
             });
+    }
+
+    public Flux<Credit> hasDebt(String customerId){
+        return creditRepository.findByCustomerId(customerId)
+                .map( credit -> {
+                    var today = LocalDate.now();
+                    int paymentDay = credit.getPaymentDay();
+                    LocalDate fechaLimite = today.withDayOfMonth(Math.min(paymentDay, today.lengthOfMonth()));
+                    if(credit.getType() == Credit.CreditType.CREDIT_CARD){
+
+                        if (today.isAfter(fechaLimite)) {
+                            if(credit.getCreditUsageToPay() > 0){
+                                return credit;
+                            }
+                        }
+
+                    }
+                    return new Credit();
+                })
+                .filter(c -> c.getId() != null);
     }
 
     public Mono<Void> delete(String id) {
