@@ -23,6 +23,11 @@ public class CreditController {
         return useCase.findAll();
     }
 
+    @GetMapping("/customer/{docNumber}")
+    public Flux<Credit> getCreditsByCustomerId(@PathVariable String docNumber) {
+        return useCase.findByDocument(docNumber);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Credit> createCredit(@RequestBody Credit credit) {
