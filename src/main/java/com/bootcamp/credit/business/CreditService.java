@@ -1,13 +1,16 @@
 package com.bootcamp.credit.business;
 
+import com.bootcamp.credit.dto.TransactionAccountBankRequest;
 import com.bootcamp.credit.dto.CreditRequestDTO;
 import com.bootcamp.credit.dto.PaymentRequest;
+import com.bootcamp.credit.dto.TransactionRequest;
 import com.bootcamp.credit.enums.TransactionType;
 import com.bootcamp.credit.model.Credit;
 import com.bootcamp.credit.model.Customer;
-import com.bootcamp.credit.repository.CreditRepository;
+import com.bootcamp.credit.repository.CreditRepositoryDepre;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -15,11 +18,11 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 
+@Slf4j
 @RequiredArgsConstructor
-@Service
 public class CreditService {
 
-    private final CreditRepository creditRepository;
+    private final CreditRepositoryDepre creditRepository;
     private final WebClient.Builder webClientBuilder;
 
     public Flux<Credit> findAll() {
@@ -51,10 +54,10 @@ public class CreditService {
                         : saveNewCredit(credit); });
     }
 
-    private Mono<Void> validateCustomerType(String customerId, Credit.CreditType creditType) {
+    private Mono<Void> validateCustomerType(String document, Credit.CreditType creditType) {
         return webClientBuilder.build()
                 .get()
-                .uri("http://localhost:8085/api/v1/customer/{id}", customerId)
+                .uri("http://localhost:8085/api/v1/customer/{docNumber}", document)
                 .retrieve()
                 .bodyToMono(Customer.class)
                 .flatMap(customer -> {
@@ -88,7 +91,6 @@ public class CreditService {
         if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
             // Set credit card specific dates
             LocalDate now = LocalDate.now();
-            credit.setCutDate(now.with(TemporalAdjusters.lastDayOfMonth()));
             credit.setPaymentDate(now.plusMonths(1).withDayOfMonth(15));
             credit.setCreditUsageToPay(0.0);
         }
@@ -113,36 +115,38 @@ public class CreditService {
 
     public Mono<Credit> makePayment(PaymentRequest request) {
 
-        if(request.getOrigen().getProductId() == null || request.getOrigen().getProductId().isEmpty()){
-            //guardar transaccion
+        if(request.getOrigen().getProductId() == null || request.getOrigen().getProductId().isEmpty()){ //alguien que va a pagar por ventanilla
 
-            //guardar
             return creditRepository.findByCreditNumber(request.getDestino().getProductId())
                 .flatMap(credit -> {
-                    credit.setCreditUsageToPay(credit.getCreditUsageToPay() - request.getAmount());
+                TransactionRequest transactionRequest = buildTransactionRequest(request, credit);
+                credit.setCreditUsageToPay(credit.getCreditUsageToPay() - request.getAmount());
+                return sendTransactionToService(transactionRequest)
+                        .flatMap(a -> creditRepository.save(credit));
+            });
+        } else { // los clientes que tienen cuenta de debito
+            return creditRepository.findByCreditNumber(request.getOrigen().getProductId())
+                .flatMap(credit -> {
+
+                    if (credit.getBalance() < request.getAmount()) {
+                        return Mono.error(new IllegalArgumentException(
+                            "Payment amount exceeds credit balance"));
+                    }
+
+                    credit.setBalance(credit.getBalance() - request.getAmount());
+
+                    if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
+                        credit.setCreditUsageToPay(Math.min(credit.getLinea(), credit.getCreditUsageToPay() + request.getAmount()));
+                    }
+
+                    //LOGICA PARA GARDAR LA TRANSACCION
+
+                    // depsues de gardar transaccion
                     return creditRepository.save(credit);
                 });
         }
 
-        return creditRepository.findByCreditNumber(request.getOrigen().getProductId())
-            .flatMap(credit -> {
 
-                if (credit.getBalance() < request.getAmount()) {
-                    return Mono.error(new IllegalArgumentException(
-                            "Payment amount exceeds credit balance"));
-                }
-
-                credit.setBalance(credit.getBalance() - request.getAmount());
-
-                if (credit.getType() == Credit.CreditType.CREDIT_CARD) {
-                    credit.setCreditUsageToPay(Math.min(credit.getLinea(), credit.getCreditUsageToPay() + request.getAmount()));
-                }
-
-                //LOGICA PARA GARDAR LA TRANSACCION
-
-                // depsues de gardar transaccion
-                return creditRepository.save(credit);
-            });
     }
 
     public Mono<Credit> chargeConsumption(String creditId, Double amount) {
@@ -218,5 +222,42 @@ public class CreditService {
 
     public Mono<Void> delete(String id) {
         return creditRepository.deleteById(id);
+    }
+
+    private TransactionRequest buildTransactionRequest(PaymentRequest request, Credit credit) {
+
+        TransactionAccountBankRequest origen = TransactionAccountBankRequest.builder()
+                .customerId(request.getOrigen().getCustomerId())
+                .productId(request.getOrigen().getProductId())
+                .productType("")  // Vacio porque es pago por ventanilla.
+                .bankName("")
+                .build();
+
+        TransactionAccountBankRequest destino = TransactionAccountBankRequest.builder()
+                .customerId(request.getDestino().getCustomerId())
+                .productId(request.getDestino().getProductId())
+                .productType(credit.getType().name())
+                .bankName(credit.getBankName())
+                .build();
+
+        return TransactionRequest.builder()
+                .amount(request.getAmount())
+                .type(TransactionType.PAYMENT)
+                .origen(origen)
+                .destino(destino)
+                .build();
+    }
+
+    private Mono<Object> sendTransactionToService(TransactionRequest transactionRequest) {
+
+        return webClientBuilder.build()
+                .post()
+                .uri("http://localhost:8084/api/v1/transaction")
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(transactionRequest)
+                .retrieve()
+                .bodyToMono(Object.class)
+                .onErrorMap( a -> new RuntimeException("Error en la comunicacion con " + "http://localhost:8084/api/v1/transaction"))
+                .doOnError(a -> log.error("Error al cuminicasrse con el servicio"));
     }
 }

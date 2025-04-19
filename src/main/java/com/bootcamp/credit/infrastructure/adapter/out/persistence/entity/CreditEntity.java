@@ -1,5 +1,6 @@
-package com.bootcamp.credit.model;
+package com.bootcamp.credit.infrastructure.adapter.out.persistence.entity;
 
+import com.bootcamp.credit.domain.enums.CreditType;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,12 +18,12 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 @Document(collection = "credit")
-public class Credit {
+public class CreditEntity {
     @Id
     private String id;
 
     @NotBlank(message = "Customer ID is required")
-    private String customerId;
+    private String document;
 
     @NotNull(message = "Credit type is required")
     private CreditType type;
@@ -30,7 +31,7 @@ public class Credit {
     private String bankName;
 
     @NotBlank(message = "Credit number is required")
-    private String creditNumber;
+    private String productoId;
 
     @NotNull(message = "Amount is required")
     @Min(value = 0, message = "Amount must be positive")
@@ -49,15 +50,10 @@ public class Credit {
 
     // Common fields for all credit types
     private Integer paymentDay; // Day of month for payments
-    private Integer cutOfDay; // Day of month for payments
+    private Integer cutOfDay;
     private Integer remainingInstallments; // cuotas restantes
 
     // Fields specific to credit cards
-    private Double creditLimit;
     private Double creditUsageToPay; // credito usado por pagar
     private LocalDate paymentDate; // For credit cards
-
-    public enum CreditType {
-        CREDIT_PERSONAL, CREDIT_EMPRESARIAL, CREDIT_CARD
-    }
 }

@@ -27,6 +27,6 @@ public class Customer {
 
 
     public enum CustomerType {
-        PERSONAL, BUSINESS
+        PERSONAL, EMPRESARIAL
     }
 }

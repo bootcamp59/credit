@@ -5,7 +5,7 @@ import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-public interface CreditRepository extends ReactiveMongoRepository<Credit, String> {
+public interface CreditRepositoryDepre extends ReactiveMongoRepository<Credit, String> {
     Flux<Credit> findByCustomerId(String customerId);
     Flux<Credit> findByCustomerIdAndType(String customerId, Credit.CreditType type);
     Mono<Credit> findByCreditNumber(String creditNumber);
