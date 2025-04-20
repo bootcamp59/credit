@@ -11,5 +11,6 @@ public interface CreditUseCase {
     Mono<Credit> create(Credit model);
     Mono<OperationDto> payment(OperationDto operationDto);
     Mono<OperationDto> chargeConsumption(OperationDto operationDto);
+    Flux<Credit> hasDebt(String document);
 
 }

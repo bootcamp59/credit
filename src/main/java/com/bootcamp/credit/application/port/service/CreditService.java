@@ -90,6 +90,32 @@ public class CreditService implements CreditUseCase {
                 });
     }
 
+    @Override
+    public Flux<Credit> hasDebt(String document) {
+        return port.findByDocument(document)
+            .map( credit -> {
+                var today = LocalDate.now();
+                int paymentDay = credit.getPaymentDay();
+                LocalDate fechaLimite = today.withDayOfMonth(Math.min(paymentDay, today.lengthOfMonth()));
+                //if(credit.getType() == CreditType.CREDIT_CARD){
+                    if (today.isAfter(fechaLimite)) {
+                        if(credit.getType() == CreditType.CREDIT_CARD){
+                            if(credit.getCreditUsageToPay() > 0){
+                                return credit;
+                            }
+                        } else {
+                            if(credit.getBalance() > 0){
+                                return credit;
+                            }
+                        }
+
+                    }
+                //}
+                return new Credit();
+            })
+            .filter(c -> c.getId() != null);
+    }
+
 
     private Mono<Void> validateCustomerType(String document, CreditType creditType) {
         return webClientBuilder.build()

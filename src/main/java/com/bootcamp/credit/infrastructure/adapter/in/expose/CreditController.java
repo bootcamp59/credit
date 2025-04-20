@@ -49,4 +49,10 @@ public class CreditController {
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(resp));
     }
+
+    //cliente no podra obtener un producto si posee alguna deuda vencida
+    @GetMapping("/customer/{document}/debt")
+    public Flux<Credit> hasDebt(@PathVariable  String document){
+        return useCase.hasDebt(document);
+    }
 }

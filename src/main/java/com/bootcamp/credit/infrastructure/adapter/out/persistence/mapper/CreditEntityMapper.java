@@ -20,7 +20,7 @@ public class CreditEntityMapper {
             .paymentDate(entity.getPaymentDate())
             .remainingInstallments(entity.getRemainingInstallments())
             .creditUsageToPay(entity.getCreditUsageToPay())
-            .paymentDate(entity.getPaymentDate())
+            .paymentDay(entity.getPaymentDay())
             .build();
     }
 
@@ -39,7 +39,7 @@ public class CreditEntityMapper {
             .paymentDate(model.getPaymentDate())
             .remainingInstallments(model.getRemainingInstallments())
             .creditUsageToPay(model.getCreditUsageToPay())
-            .paymentDate(model.getPaymentDate())
+            .paymentDay(model.getPaymentDay())
             .build();
     }
 }
