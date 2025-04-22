@@ -120,7 +120,7 @@ public class CreditService implements CreditUseCase {
     private Mono<Void> validateCustomerType(String document, CreditType creditType) {
         return webClientBuilder.build()
                 .get()
-                .uri("http://localhost:8085/api/v1/customer/customers/{docNumber}", document)
+                .uri("http://CUSTOMER/api/v1/customer/customers/{docNumber}", document)
                 .retrieve()
                 .bodyToMono(Customer.class)
                 .flatMap(customer -> {
@@ -161,7 +161,7 @@ public class CreditService implements CreditUseCase {
     private Mono<Object> saveMovements(TransactionDto transactionDto){
         return webClientBuilder.build()
                 .post()
-                .uri("http://localhost:8084/api/v1/transaction")
+                .uri("http://TRANSACTION/api/v1/transaction")
                 .accept(MediaType.APPLICATION_JSON)
                 .bodyValue(transactionDto)
                 .retrieve()
