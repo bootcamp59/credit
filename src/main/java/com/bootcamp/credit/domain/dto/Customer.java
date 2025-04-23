@@ -1,4 +1,4 @@
-package com.bootcamp.credit.model;
+package com.bootcamp.credit.domain.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
